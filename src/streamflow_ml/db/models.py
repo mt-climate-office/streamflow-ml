@@ -1,15 +1,33 @@
 from __future__ import annotations
-from datetime import date, datetime
-from typing import List, Any
-from sqlalchemy import ForeignKey, String, Identity, Date, BigInteger
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
-from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import mapped_column, Mapped
-from sqlalchemy.orm import relationship
-from typing import Optional
-from sqlalchemy.dialects.postgresql import JSONB
+from streamflow_ml.db import Base
+from sqlalchemy import String, ForeignKey, Date, Float, Column
+from datetime import date
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.ext.asyncio import AsyncSession
+from geoalchemy2 import Geometry
 
 
-class Base(AsyncAttrs, DeclarativeBase):
-    type_annotation_map = {dict[str, Any]: JSONB}
+class Locations(Base):
+    __tablename__ = "locations"
+    __table_args__ = {"schema": "flow", "extend_existing": True}
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    group: Mapped[str] = mapped_column(String, index=True)
+    name: Mapped[str] = mapped_column(String)
+    geometry = Column(Geometry(geometry_type="MULTIPOLYGON", srid=4326))
+
+    # https://github.com/rhoboro/async-fastapi-sqlalchemy/blob/main/app/api/notebooks/views.py
+    @classmethod
+    async def create(cls, session: AsyncSession):
+        pass
+
+class Data(Base):
+    __tablename__ = "data"
+    __table_args__ = {"schema": "flow", "extend_existing": True}
+
+    location: Mapped[str] = mapped_column(
+        ForeignKey("flow.locations.id"), primary_key=True, index=True
+    )
+    date: Mapped[date] = mapped_column(Date, primary_key=True, index=True)
+    version: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    value: Mapped[float] = mapped_column(Float)

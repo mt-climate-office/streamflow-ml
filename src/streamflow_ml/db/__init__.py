@@ -4,13 +4,10 @@ from typing import AsyncIterator, Annotated
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import (
-    AsyncAttrs,
     async_sessionmaker,
     create_async_engine,
-    AsyncEngine,
 )
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql import text
 from sqlalchemy import URL
 from dotenv import load_dotenv
@@ -35,6 +32,7 @@ AsyncSessionLocal = async_sessionmaker(
     future=True,
 )
 
+
 async def get_session() -> AsyncIterator[async_sessionmaker]:
     try:
         yield AsyncSessionLocal
@@ -51,4 +49,6 @@ async def init_db(async_engine, base):
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS flow;"))
         await conn.run_sync(base.metadata.create_all)
-
+        # await conn.execute(
+        #     text("SELECT create_hypertable('flow.data', by_range('date', INTERVAL '1 year'));")
+        # )

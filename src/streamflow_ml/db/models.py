@@ -24,6 +24,7 @@ class Locations(Base):
     async def create(cls, session: AsyncSession):
         pass
 
+
 class Data(Base):
     __tablename__ = "data"
     __table_args__ = {"schema": "flow", "extend_existing": True}

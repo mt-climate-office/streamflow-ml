@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, List
 
 from fastapi import FastAPI, Request, UploadFile, Depends
 from streamflow_ml.db import async_engine, init_db, models, AsyncSession, get_session
@@ -75,7 +75,7 @@ async def post_locations(
 
 
 @app.post("/prediction")
-async def post_predictions(
+async def post_prediction(
     prediction: schemas.CreatePredictions,
     async_session: Annotated[AsyncSession, Depends(get_session)],
 ):
@@ -88,3 +88,22 @@ async def post_predictions(
         raise HTTPException(409, f"{prediction} already exists.")
 
     return 1
+
+
+@app.post("/predictions")
+async def post_predictions(
+    predictions: List[schemas.CreatePredictions],
+    async_session: Annotated[AsyncSession, Depends(get_session)],
+):
+    try:
+        async with async_session.begin() as session:
+            # Convert list of Pydantic objects to list of model instances
+            prediction_models = [models.Data(**prediction.__dict__) for prediction in predictions]
+            
+            # Bulk insert instead of inserting one by one
+            session.add_all(prediction_models)
+            await session.commit()
+    except IntegrityError:
+        raise HTTPException(409, "Some or all of the predictions already exist.")
+    
+    return len(predictions)

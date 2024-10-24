@@ -29,9 +29,6 @@ url = URL.create(
 
 async_engine = create_async_engine(url)
 
-class Base(AsyncAttrs, DeclarativeBase): ...
-
-
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
     autoflush=False,
@@ -43,6 +40,7 @@ async def get_session() -> AsyncIterator[async_sessionmaker]:
         yield AsyncSessionLocal
     except SQLAlchemyError as e:
         print(e)
+        raise
 
 
 AsyncSession = Annotated[async_sessionmaker, Depends(get_session)]

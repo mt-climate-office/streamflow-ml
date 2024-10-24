@@ -1,10 +1,13 @@
 from __future__ import annotations
-from streamflow_ml.db import Base
 from sqlalchemy import String, ForeignKey, Date, Float, Column
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from datetime import date
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
 from sqlalchemy.ext.asyncio import AsyncSession
 from geoalchemy2 import Geometry
+
+
+class Base(AsyncAttrs, DeclarativeBase): ...
 
 
 class Locations(Base):

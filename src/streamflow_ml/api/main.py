@@ -48,7 +48,6 @@ app = FastAPI(
         "url": "https://climate.umt.edu",
         "email": "colin.brust@umt.edu",
     },
-    root_path="/streamflow-api"
 )
 
 

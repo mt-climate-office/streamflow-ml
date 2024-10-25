@@ -12,4 +12,4 @@ RUN uv sync --frozen --no-cache
 
 # Run the application.
 # CMD ["tail", "-f", "/dev/null"]
-CMD ["/app/.venv/bin/fastapi", "run", "src/streamflow_ml/api/main.py", "--port", "80", "--host", "0.0.0.0"]
+CMD ["/app/.venv/bin/fastapi", "run", "src/streamflow_ml/api/main.py", "--port", "8000", "--host", "0.0.0.0"]

@@ -24,6 +24,12 @@ services:
             - .env
         ports:
             - "8000:80"
+        networks:
+            - streamflow-net
 
 volumes:
     streamflow-data: {}
+
+networks:
+    streamflow-net:
+        external: true

@@ -16,6 +16,14 @@ services:
             - ./init.sql:/docker-entrypoint-initdb.d/init.sql
         env_file:
             - .env
+    streamflow-api:
+        container_name: streamflow-api
+        restart: always
+        build: .
+        env_file:
+            - .env
+        ports:
+            - "8000:80"
 
 volumes:
     streamflow-data: {}

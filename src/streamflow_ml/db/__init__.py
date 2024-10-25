@@ -49,6 +49,6 @@ async def init_db(async_engine, base):
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS flow;"))
         await conn.run_sync(base.metadata.create_all)
-        await conn.execute(
-            text("SELECT create_hypertable('flow.data', by_range('date', INTERVAL '1 year'));")
-        )
+        # await conn.execute(
+        #     text("SELECT create_hypertable('flow.data', by_range('date', INTERVAL '1 year'));")
+        # )

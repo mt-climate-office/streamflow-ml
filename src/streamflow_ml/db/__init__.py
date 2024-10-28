@@ -1,7 +1,6 @@
 import os
 from typing import AsyncIterator, Annotated
 
-
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
@@ -11,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import text
 from sqlalchemy import URL
 from dotenv import load_dotenv
+from streamflow_ml.db.timescale import TIMESCALE_SETUP
 
 load_dotenv()
 
@@ -49,6 +49,6 @@ async def init_db(async_engine, base):
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS flow;"))
         await conn.run_sync(base.metadata.create_all)
-        # await conn.execute(
-        #     text("SELECT create_hypertable('flow.data', by_range('date', INTERVAL '1 year'));")
-        # )
+        if os.getenv("INIT_TIMESCALE"):
+            async for query in TIMESCALE_SETUP:
+                await conn.execute(query)

@@ -154,6 +154,8 @@ async def get_predictions(
             .order_by(models.Data.location, models.Data.date)
         )
 
+        # to get cfs:  mm / seconds to feet to cubnic feet
+
         result = await session.execute(q)
         data_rows = result.scalars().all()
         if len(data_rows) == 0:

@@ -142,28 +142,6 @@ async def post_predictions(
 async def get_predictions(
     predictions: Annotated[schemas.GetPredictions, Query()],
     async_session: Annotated[AsyncSession, Depends(get_session)],
-) -> List[schemas.ReturnPredictions]:
-    async with async_session.begin() as session:
-        q = (
-            select(models.Data)
-            .where(
-                models.Data.location.in_(predictions.locations),
-                models.Data.date <= predictions.date_end,
-                models.Data.date >= predictions.date_start,
-            )
-            .order_by(models.Data.location, models.Data.date)
-        )
-
-        # to get cfs:  mm / seconds to feet to cubnic feet
-
-        result = await session.execute(q)
-        data_rows = result.scalars().all()
-        if len(data_rows) == 0:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                "No data available for requested location and time range.",
-            )
-        data_schemas = [
-            schemas.ReturnPredictions.model_validate(row) for row in data_rows
-        ]
-    return data_schemas
+) -> schemas.ReturnPredictions:
+    data = await crud.read_predictions(predictions, async_session)
+    return data

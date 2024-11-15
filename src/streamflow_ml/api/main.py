@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Annotated, List
 
 from fastapi import FastAPI, Request, UploadFile, Depends, status, Query
@@ -125,10 +126,10 @@ async def post_predictions(
     try:
         async with async_session.begin() as session:
             # Convert list of Pydantic objects to list of model instances
-            prediction_models = [
-                models.Data(**prediction.__dict__) for prediction in predictions
-            ]
-            stmt = insert(models.Data).values([obj.__dict__ for obj in prediction_models])
+            # prediction_models = [
+            #     models.Data(**prediction.__dict__) for prediction in predictions
+            # ]
+            stmt = insert(models.Data).values([pred.model_dump() for pred in predictions])
             indices = ['location', 'date', 'version']
             upsert_stmt = stmt.on_conflict_do_update(
                 index_elements=indices,

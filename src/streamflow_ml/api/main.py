@@ -59,6 +59,7 @@ async def get_root(request: Request):
 
 # Can post with curl -X POST "http://127.0.0.1:8000/locations" -F "file=@./streamflow_ml_operational_inference_huc10_simple.geojson"
 @app.post("/locations")
+@app.post("/locations/", include_in_schema=False)
 async def post_locations(
     file: UploadFile,
     async_session: Annotated[AsyncSession, Depends(get_session)],
@@ -106,7 +107,8 @@ async def post_prediction(
     try:
         async with async_session.begin() as session:
             prediction = models.Data(**prediction.__dict__)
-            session.add(prediction)
+            # merge does an insert if data don't exist, upsert if they do.
+            session.merge(prediction)
             await session.commit()
     except IntegrityError:
         raise HTTPException(status.HTTP_409_CONFLICT, f"{prediction} already exists.")

@@ -7,6 +7,7 @@ from streamflow_ml.api import crud, schemas
 from contextlib import asynccontextmanager
 from geoalchemy2.functions import ST_GeomFromGeoJSON
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.dialects.postgresql import insert
 from fastapi.exceptions import HTTPException
 import json
 import os
@@ -34,7 +35,7 @@ def authenticate_sfml(api_key: str = Depends(sfml_key_header)):
 async def lifespan(app: FastAPI):
     await init_db(async_engine, models.Base)
     yield
-    async_engine.dispose()
+    await async_engine.dispose()
 
 
 app = FastAPI(
@@ -127,9 +128,14 @@ async def post_predictions(
             prediction_models = [
                 models.Data(**prediction.__dict__) for prediction in predictions
             ]
+            stmt = insert(models.Data).values([obj.__dict__ for obj in prediction_models])
+            indices = ['location', 'date', 'version']
+            upsert_stmt = stmt.on_conflict_do_update(
+                index_elements=indices,
+                set_={key: stmt.excluded[key] for key in models.Data.__table__.columns.keys() if key not in indices}
+            )
 
-            # Bulk insert instead of inserting one by one
-            session.add_all(prediction_models)
+            await session.execute(upsert_stmt)
             await session.commit()
     except IntegrityError:
         raise HTTPException(

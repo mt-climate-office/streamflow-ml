@@ -53,7 +53,7 @@ async def post_to_api(
 
             try:
                 response = await client.post(
-                    api_url, json=json_data, headers={"SFML_KEY": sfml_key}
+                    api_url, json=json_data, headers={"X-SFML-KEY": sfml_key}
                 )
                 response.raise_for_status()
 

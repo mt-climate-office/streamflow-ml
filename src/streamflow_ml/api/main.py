@@ -6,7 +6,6 @@ from streamflow_ml.db import async_engine, init_db, models, AsyncSession, get_se
 from streamflow_ml.api import crud, schemas
 from contextlib import asynccontextmanager
 from geoalchemy2.functions import ST_GeomFromGeoJSON
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from fastapi.exceptions import HTTPException
 import json
@@ -48,7 +47,7 @@ app = FastAPI(
         "url": "https://climate.umt.edu",
         "email": "colin.brust@umt.edu",
     },
-    root_path="/streamflow-api"
+    root_path="/streamflow-api",
 )
 
 

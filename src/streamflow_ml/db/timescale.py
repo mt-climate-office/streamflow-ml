@@ -20,7 +20,4 @@ make_area_view = text("""
     FROM area_calculated;
 """)
 
-TIMESCALE_SETUP = [
-    make_flow_hypertable,
-    make_area_view
-]
+TIMESCALE_SETUP = [make_flow_hypertable, make_area_view]

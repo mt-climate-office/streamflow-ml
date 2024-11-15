@@ -1,7 +1,6 @@
 from fastapi import HTTPException, status
 from streamflow_ml.db import AsyncSession, models
 from streamflow_ml.api import schemas
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from collections import defaultdict
 
@@ -28,21 +27,23 @@ def remap_keys(data: dict, required: list[str]) -> dict[str, str]:
 
     return found_substrings
 
-def compress_models(models: list[schemas.RawReturnPredictions]) -> schemas.ReturnPredictions:
+
+def compress_models(
+    models: list[schemas.RawReturnPredictions],
+) -> schemas.ReturnPredictions:
     compressed_data = defaultdict(list)
-    
+
     for model in models:
         for field_name, field_value in model.model_dump().items():
             compressed_data[field_name].append(field_value)
-    
+
     return schemas.ReturnPredictions(**compressed_data)
 
+
 async def read_predictions(
-    predictions: schemas.GetPredictions, 
-    async_session: AsyncSession
+    predictions: schemas.GetPredictions, async_session: AsyncSession
 ) -> schemas.ReturnPredictions:
     async with async_session.begin() as session:
-
         table = models.Data if predictions.units.value == "mm" else models.CFS
         q = (
             select(table)
@@ -50,7 +51,7 @@ async def read_predictions(
                 table.location.in_(predictions.locations),
                 table.date <= predictions.date_end,
                 table.date >= predictions.date_start,
-                table.version == predictions.version.value
+                table.version == predictions.version.value,
             )
             .order_by(table.location, table.date)
         )

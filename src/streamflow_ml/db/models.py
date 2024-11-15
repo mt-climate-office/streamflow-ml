@@ -41,9 +41,7 @@ class CFS(Base):
     __tablename__ = "cfs"
     __table_args__ = {"schema": "flow", "extend_existing": True}
 
-    location: Mapped[str] = mapped_column(
-        String, primary_key=True, index=True
-    )
+    location: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     date: Mapped[date] = mapped_column(Date, primary_key=True, index=True)
     version: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     value: Mapped[float] = mapped_column(Float)

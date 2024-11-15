@@ -7,6 +7,8 @@
 #     "tqdm",
 # ]
 # ///
+import os
+
 import asyncio
 import argparse
 import httpx
@@ -26,47 +28,63 @@ def parse_observations(data: Path | str, version: str = "v1.0") -> pl.DataFrame:
                 "mm_d": "value",
             }
         )
-        .with_columns([
-            pl.col("date").cast(pl.Utf8),
-            pl.lit(version).alias("version")
-        ])
+        .with_columns([pl.col("date").cast(pl.Utf8), pl.lit(version).alias("version")])
     )
 
-async def post_to_api(data: pl.DataFrame, api_url: str = "http://127.0.0.1:8000/prediction", chunk_size: int = 1000):
-    async with httpx.AsyncClient() as client:
 
-        for chunk in tqdm(range(0, data.height, chunk_size), total=(data.height // chunk_size), desc="Posting chunks"):
+async def post_to_api(
+    data: pl.DataFrame,
+    api_url: str = "http://127.0.0.1:8000/prediction",
+    chunk_size: int = 1000,
+    sfml_key: str = None,
+):
+    if sfml_key is None:
+        raise ValueError(
+            "Your token for the streamflow database wasn't found. Please make sure it is set as an environment variable called 'SFML_KEY'."
+        )
+    async with httpx.AsyncClient() as client:
+        for chunk in tqdm(
+            range(0, data.height, chunk_size),
+            total=(data.height // chunk_size),
+            desc="Posting chunks",
+        ):
             chunk_data = data[chunk : chunk + chunk_size]
             json_data = chunk_data.to_dicts()
 
             try:
-                response = await client.post(api_url, json=json_data)
+                response = await client.post(
+                    api_url, json=json_data, headers={"SFML_KEY": sfml_key}
+                )
                 response.raise_for_status()
 
             except httpx.HTTPStatusError as exc:
-                print(f"Error response {exc.response.status_code} while posting chunk: {exc.response.text}")
+                print(
+                    f"Error response {exc.response.status_code} while posting chunk: {exc.response.text}"
+                )
+
 
 def main():
-
     parser = argparse.ArgumentParser(description="Post observation data to an API.")
     parser.add_argument("data", type=str, help="Path to the parquet data file")
     parser.add_argument(
-        "--api-url", 
-        type=str, 
-        default="http://127.0.0.1:8000/predictions", 
-        help="API URL to post the data (default: http://127.0.0.1:8000/predictions)"
+        "--api-url",
+        type=str,
+        default="http://127.0.0.1:8000/predictions",
+        help="API URL to post the data (default: http://127.0.0.1:8000/predictions)",
     )
     parser.add_argument(
-        "--chunk-size", 
-        type=int, 
-        default=1000, 
-        help="Number of rows to send per request (default: 1000)"
+        "--chunk-size",
+        type=int,
+        default=1000,
+        help="Number of rows to send per request (default: 1000)",
     )
     args = parser.parse_args()
 
+    key = os.getenv("SFML_KEY")
     data = parse_observations(args.data)
 
-    asyncio.run(post_to_api(data, args.api_url, args.chunk_size))
+    asyncio.run(post_to_api(data, args.api_url, args.chunk_size, key))
+
 
 if __name__ == "__main__":
     main()

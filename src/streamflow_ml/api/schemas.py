@@ -27,6 +27,7 @@ class GetPredictions(BaseModel):
     units: StreamflowUnits = StreamflowUnits.CFS
     version: Version = Version.V1
 
+
 class RawReturnPredictions(BaseModel):
     location: str
     date: date
@@ -36,6 +37,7 @@ class RawReturnPredictions(BaseModel):
     class Config:
         from_attributes = True
 
+
 class ReturnPredictions(BaseModel):
     location: list[str]
     date: list[date]
@@ -44,4 +46,3 @@ class ReturnPredictions(BaseModel):
 
     class Config:
         from_attributes = True
-

@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from streamflow_ml.db import AsyncSession, models
 from streamflow_ml.api import schemas
-from sqlalchemy import select
+from sqlalchemy import select, func
 from collections import defaultdict
 
 
@@ -57,6 +57,48 @@ async def read_predictions(
         )
 
         result = await session.execute(q)
+        data_rows = result.scalars().all()
+        if len(data_rows) == 0:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "No data available for requested location and time range.",
+            )
+        data_schemas = [
+            schemas.RawReturnPredictions.model_validate(row) for row in data_rows
+        ]
+
+        return compress_models(data_schemas)
+
+
+async def spatial_query(
+    lat: float,
+    lon: float,
+    predictions: schemas.GetPredictions,
+    async_session: AsyncSession,
+) -> schemas.ReturnLocation:
+    async with async_session.begin() as session:
+        point = f"POINT({lon} {lat})"
+
+        # First get the location_id from spatial query
+        location_subq = (
+            select(models.Locations.id)
+            .where(
+                func.ST_Contains(
+                    models.Locations.geometry, func.ST_GeomFromText(point, 4326)
+                )
+            )
+            .scalar_subquery()
+        )
+
+        # Then use that id to query the right table
+        table = models.Data if predictions.units.value == "mm" else models.CFS
+        stmt = select(table).where(
+            table.location == location_subq,
+            table.date <= predictions.date_end,
+            table.date >= predictions.date_start,
+            table.version == predictions.version.value,
+        )
+        result = await session.execute(stmt)
         data_rows = result.scalars().all()
         if len(data_rows) == 0:
             raise HTTPException(

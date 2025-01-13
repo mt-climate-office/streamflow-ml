@@ -1,7 +1,6 @@
-from dataclasses import asdict
 from typing import Annotated, List
 
-from fastapi import FastAPI, Request, UploadFile, Depends, status, Query
+from fastapi import FastAPI, Request, UploadFile, Depends, status, Query, Path
 from fastapi.security.api_key import APIKeyHeader
 from streamflow_ml.db import async_engine, init_db, models, AsyncSession, get_session
 from streamflow_ml.api import crud, schemas
@@ -129,11 +128,17 @@ async def post_predictions(
             # prediction_models = [
             #     models.Data(**prediction.__dict__) for prediction in predictions
             # ]
-            stmt = insert(models.Data).values([pred.model_dump() for pred in predictions])
-            indices = ['location', 'date', 'version']
+            stmt = insert(models.Data).values(
+                [pred.model_dump() for pred in predictions]
+            )
+            indices = ["location", "date", "version"]
             upsert_stmt = stmt.on_conflict_do_update(
                 index_elements=indices,
-                set_={key: stmt.excluded[key] for key in models.Data.__table__.columns.keys() if key not in indices}
+                set_={
+                    key: stmt.excluded[key]
+                    for key in models.Data.__table__.columns.keys()
+                    if key not in indices
+                },
             )
 
             await session.execute(upsert_stmt)
@@ -147,9 +152,36 @@ async def post_predictions(
 
 
 @app.get("/predictions")
+@app.get("/predictions/", include_in_schema=False)
 async def get_predictions(
-    predictions: Annotated[schemas.GetPredictions, Query()],
+    predictions: Annotated[schemas.GetPredictionsLocations, Query()],
     async_session: Annotated[AsyncSession, Depends(get_session)],
 ) -> schemas.ReturnPredictions:
     data = await crud.read_predictions(predictions, async_session)
     return data
+
+
+@app.get("/predictions/{latitude}/{longitude}")
+async def get_predictions_from_point(
+    latitude: Annotated[
+        float,
+        Path(
+            title="Latitude",
+            description="Latitude of the region of interest.",
+            ge=24,
+            le=50,
+        ),
+    ],
+    longitude: Annotated[
+        float,
+        Path(
+            title="Longitude",
+            description="Longitude of the region of interest.",
+            ge=-125.0,
+            le=-66.0,
+        ),
+    ],
+    predictions: Annotated[schemas.GetPredictions, Query()],
+    async_session: Annotated[AsyncSession, Depends(get_session)],
+) -> schemas.ReturnPredictions:
+    return await crud.spatial_query(latitude, longitude, predictions, async_session)

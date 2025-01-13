@@ -2,7 +2,7 @@ from __future__ import annotations
 from sqlalchemy import String, ForeignKey, Date, Float, Column
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from datetime import date
-from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
+from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
 from sqlalchemy.ext.asyncio import AsyncSession
 from geoalchemy2 import Geometry
 
@@ -25,6 +25,15 @@ class Locations(Base):
         pass
 
 
+class Latest(Base):
+    __tablename__ = "latest"
+    __table_args__ = {"schema": "flow", "extend_existing": True}
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    value: Mapped[float] = mapped_column(Float)
+    geometry = Column(Geometry(geometry_type="MULTIPOLYGON", srid=4326))
+
+
 class Data(Base):
     __tablename__ = "data"
     __table_args__ = {"schema": "flow", "extend_existing": True}
@@ -45,3 +54,7 @@ class CFS(Base):
     date: Mapped[date] = mapped_column(Date, primary_key=True, index=True)
     version: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     value: Mapped[float] = mapped_column(Float)
+
+    location_rel = relationship(
+        "Locations", foreign_keys=[location], primaryjoin="CFS.location == Locations.id"
+    )

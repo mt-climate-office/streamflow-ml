@@ -1,4 +1,6 @@
 from typing import Annotated, List
+from urllib.parse import parse_qs as parse_query_string
+from urllib.parse import urlencode as encode_query_string
 
 from fastapi import FastAPI, Request, UploadFile, Depends, status, Query, Path
 from fastapi.security.api_key import APIKeyHeader
@@ -11,6 +13,8 @@ from sqlalchemy.dialects.postgresql import insert
 from fastapi.exceptions import HTTPException
 import json
 import os
+from starlette.types import ASGIApp, Receive, Scope, Send
+
 
 description = """
 An API to deliver streamflow predicted by an ML model in ungaged basins across
@@ -20,6 +24,33 @@ the contiguous USA.
 
 SFML_KEY = os.getenv("SFML_KEY")
 sfml_key_header = APIKeyHeader(name="X-SFML-KEY", auto_error=False)
+
+
+class QueryStringFlatteningMiddleware:
+    # Credit to: https://github.com/tiangolo/fastapi/discussions/8225#discussioncomment-5149939
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        query_string = scope.get("query_string", None).decode()
+        if scope["type"] == "http" and query_string:
+            parsed = parse_query_string(query_string)
+            flattened = {}
+            for name, values in parsed.items():
+                all_values = []
+                for value in values:
+                    all_values.extend(value.split(","))
+
+                flattened[name] = all_values
+
+            # doseq: Turn lists into repeated parameters, which is better for FastAPI
+            scope["query_string"] = encode_query_string(flattened, doseq=True).encode(
+                "utf-8"
+            )
+
+            await self.app(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
 
 
 def authenticate_sfml(api_key: str = Depends(sfml_key_header)):
@@ -51,6 +82,7 @@ app = FastAPI(
     root_path="/streamflow-api",
 )
 
+app.add_middleware(QueryStringFlatteningMiddleware)
 
 @app.get("/")
 async def get_root(request: Request):
@@ -154,11 +186,12 @@ async def post_predictions(
 @app.get("/predictions")
 @app.get("/predictions/", include_in_schema=False)
 async def get_predictions(
-    predictions: Annotated[schemas.GetPredictionsLocations, Query()],
+    predictions: Annotated[schemas.GetPredictionsByLocations, Query()],
     async_session: Annotated[AsyncSession, Depends(get_session)],
 ) -> schemas.ReturnPredictions:
     data = await crud.read_predictions(predictions, async_session)
     return data
+
 
 
 @app.get("/predictions/{latitude}/{longitude}")
@@ -184,4 +217,13 @@ async def get_predictions_from_point(
     predictions: Annotated[schemas.GetPredictions, Query()],
     async_session: Annotated[AsyncSession, Depends(get_session)],
 ) -> schemas.ReturnPredictions:
-    return await crud.spatial_query(latitude, longitude, predictions, async_session)
+    return await crud.spatial_query(predictions, async_session, latitude, longitude)
+
+
+@app.get("/predictions/spatial")
+@app.get("/predictions/spatial/", include_in_schema=False)
+async def get_predictions_spatially(
+    predictions: Annotated[schemas.GetPredictionsSpatially, Query()],
+    async_session: Annotated[AsyncSession, Depends(get_session)],
+) -> schemas.ReturnPredictions:
+    return await crud.spatial_query(predictions, async_session)

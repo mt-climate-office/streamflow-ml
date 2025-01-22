@@ -99,7 +99,8 @@ async def spatial_query(
             table.date <= predictions.date_end,
             table.date >= predictions.date_start,
             table.version == predictions.version.value,
-        )
+        ).order_by(table.date.desc())
+        
         result = await session.execute(stmt)
         data_rows = result.scalars().all()
         if len(data_rows) == 0:

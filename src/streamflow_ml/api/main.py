@@ -1,6 +1,7 @@
 from typing import Annotated, List
 from urllib.parse import parse_qs as parse_query_string
 from urllib.parse import urlencode as encode_query_string
+from itertools import chain
 
 from fastapi import FastAPI, Request, UploadFile, Depends, status, Query, Path
 from fastapi.security.api_key import APIKeyHeader
@@ -217,7 +218,7 @@ async def get_predictions_from_point(
     predictions: Annotated[schemas.GetPredictions, Query()],
     async_session: Annotated[AsyncSession, Depends(get_session)],
 ) -> schemas.ReturnPredictions:
-    return await crud.spatial_query(predictions, async_session, latitude, longitude)
+    return await crud.spatial_query(latitude, longitude, predictions, async_session)
 
 
 @app.get("/predictions/spatial")
@@ -226,4 +227,15 @@ async def get_predictions_spatially(
     predictions: Annotated[schemas.GetPredictionsSpatially, Query()],
     async_session: Annotated[AsyncSession, Depends(get_session)],
 ) -> schemas.ReturnPredictions:
-    return await crud.spatial_query(predictions, async_session)
+    lat, lon = predictions.latitude, predictions.longitude
+    if len(lat) != len(lon):
+        raise HTTPException(
+            status.HTTP_406_NOT_ACCEPTABLE,
+            "Latitude and Longitude query parameters must be the same length"
+        )
+
+    locs = list(zip(lat, lon))
+    results = []
+    for lat, lon in locs:
+        results.append(await crud.spatial_query(lat, lon, predictions, async_session, return_compressed=False))
+    return crud.compress_models(list(chain.from_iterable(results)))

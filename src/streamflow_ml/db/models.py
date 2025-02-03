@@ -1,5 +1,5 @@
 from __future__ import annotations
-from sqlalchemy import String, ForeignKey, Date, Float, Column
+from sqlalchemy import String, ForeignKey, Date, Float, Column, Integer
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from datetime import date
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase, relationship
@@ -43,6 +43,7 @@ class Data(Base):
     )
     date: Mapped[date] = mapped_column(Date, primary_key=True, index=True)
     version: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    model_no: Mapped[int] = mapped_column(Integer, default=0)
     value: Mapped[float] = mapped_column(Float)
 
 

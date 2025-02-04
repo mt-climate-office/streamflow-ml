@@ -17,7 +17,7 @@ from pathlib import Path
 from tqdm.asyncio import tqdm
 
 
-def parse_observations(data: Path | str, version: str = "v1.0") -> pl.DataFrame:
+def parse_observations(data: Path | str, version: str = "v1.0", model_no: int = 0) -> pl.DataFrame:
     return (
         pl.read_parquet(data)
         .select(["basin_id", "time", "mm_d"])
@@ -28,7 +28,11 @@ def parse_observations(data: Path | str, version: str = "v1.0") -> pl.DataFrame:
                 "mm_d": "value",
             }
         )
-        .with_columns([pl.col("date").cast(pl.Utf8), pl.lit(version).alias("version")])
+        .with_columns([
+            pl.col("date").cast(pl.Utf8), 
+            pl.lit(version).alias("version"),
+            pl.lit(model_no).alias("model_no")
+        ])
     )
 
 
@@ -78,10 +82,25 @@ def main():
         default=1000,
         help="Number of rows to send per request (default: 1000)",
     )
+
+    parser.add_argument(
+        "--version",
+        type=str,
+        default="vPUB2025",
+        help="The model version to assign to the data in the database"
+    )
+
+    parser.add_argument(
+        "--model_no",
+        type=int,
+        default=0,
+        help="The k-fold model version to assign to the data in the database."
+    )
+
     args = parser.parse_args()
 
     key = os.getenv("SFML_KEY")
-    data = parse_observations(args.data)
+    data = parse_observations(args.data, version=args.version, model_no=args.model_no)
 
     asyncio.run(post_to_api(data, args.api_url, args.chunk_size, key))
 

@@ -24,6 +24,7 @@ class CreatePredictions(BaseModel):
     location: str
     date: date
     version: str
+    model_no: int
     value: float
 
 

@@ -1,41 +1,43 @@
-header {
-	# disable FLoC tracking
-	Permissions-Policy interest-cohort=()
+{$HOSTNAMES} {
+	header {
+		# disable FLoC tracking
+		Permissions-Policy interest-cohort=()
 
-	# Enable HTTP Strict Transport Security(HSTS) to force clients to always
-	# connect via HTTPS(do not use if only testing)
-	# Strict - Transport - Security max - age = 31536000;
+		# Enable HTTP Strict Transport Security(HSTS) to force clients to always
+		# connect via HTTPS(do not use if only testing)
+		# Strict - Transport - Security max - age = 31536000;
 
-	# Enable cross - site filter(XSS) and tell browser to block detected attacks
-	X-XSS-Protection "1; mode=block"
+		# Enable cross - site filter(XSS) and tell browser to block detected attacks
+		X-XSS-Protection "1; mode=block"
 
-	# Prevent some browsers from MIME - sniffing a response away from the declared Content - Type
-	X-Content-Type-Options nosniff
+		# Prevent some browsers from MIME - sniffing a response away from the declared Content - Type
+		X-Content-Type-Options nosniff
 
-	# Disallow the site to be rendered within a frame(clickjacking protection)
-	# X-Frame-Options "DENY"
+		# Disallow the site to be rendered within a frame(clickjacking protection)
+		# X-Frame-Options "DENY"
 
-	# Disable caching since https
-	# The cache should not store anything about the client request or server response.
-	Cache-Control "no-store"
-	Pragma "no-cache"
+		# Disable caching since https
+		# The cache should not store anything about the client request or server response.
+		Cache-Control "no-store"
+		Pragma "no-cache"
 
-	#CORS
-	Access-Control-Allow-Headers "User-Agent,Keep-Alive,Content-Type,Range"
-	Access-Control-Allow-Methods "GET, OPTIONS"
-	Access-Control-Allow-Origin *
-	Access-Control-Expose-Headers "Content-Length,Content-Range"
+		#CORS
+		Access-Control-Allow-Headers "User-Agent,Keep-Alive,Content-Type,Range"
+		Access-Control-Allow-Methods "GET, OPTIONS"
+		Access-Control-Allow-Origin *
+		Access-Control-Expose-Headers "Content-Length,Content-Range"
 
-	# keep referrer data off of HTTP connections
-	Referrer-Policy no-referrer-when-downgrade
+		# keep referrer data off of HTTP connections
+		Referrer-Policy no-referrer-when-downgrade
 
-	# Allow GET range requests
-	Accept-Ranges bytes
-}
+		# Allow GET range requests
+		Accept-Ranges bytes
+	}
 
-:443 {
-	root * /var
-	file_server browse
-	encode gzip
-	tls internal
+	:443 {
+		root * /var
+		file_server browse
+		encode gzip
+		tls internal
+	}
 }

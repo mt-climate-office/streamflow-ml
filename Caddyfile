@@ -35,4 +35,9 @@ header {
 	Accept-Ranges bytes
 }
 
-file_server browse
+:443 {
+	root * /var
+	file_server browse
+	encode gzip
+	tls internal
+}

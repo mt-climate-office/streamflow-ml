@@ -43,6 +43,7 @@ services:
 volumes:
     streamflow-data: {}
     caddy_data: {}
+    caddy_config: {}
 
 networks:
     streamflow-net:

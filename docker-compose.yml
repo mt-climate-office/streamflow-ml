@@ -4,13 +4,15 @@ services:
         restart: unless-stopped
         image: caddy:2.5.2
         volumes:
-        - $PWD/Caddyfile:/etc/caddy/Caddyfile
-        - /var/data:/srv
-        - caddy_data:/data
-        - caddy_config:/config
+            - $PWD/Caddyfile:/etc/caddy/Caddyfile
+            - /var/data:/srv
+            - caddy_data:/data
+            - caddy_config:/config
         ports: 
-        - "80:80"
-        - "443:443"
+            - "80:80"
+            - "443:443"
+        env_file:
+            - /git/.env
 
     streamflow-db:
         platform: linux/amd64

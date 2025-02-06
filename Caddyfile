@@ -1,5 +1,3 @@
-fcfc-mesonet-db2.cfc.umt.edu
-
 header {
 	# disable FLoC tracking
 	Permissions-Policy interest-cohort=()

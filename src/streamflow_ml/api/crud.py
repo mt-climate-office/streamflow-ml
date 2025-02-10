@@ -1,8 +1,8 @@
-from fastapi import HTTPException, status
-from streamflow_ml.db import AsyncSession, models
+from fastapi import HTTPException
 from streamflow_ml.api import schemas
-from sqlalchemy import select, func
-from collections import defaultdict
+from streamflow_ml.db import basins
+import polars as pl
+import geopandas as gpd
 
 
 def remap_keys(data: dict, required: list[str]) -> dict[str, str]:
@@ -28,90 +28,68 @@ def remap_keys(data: dict, required: list[str]) -> dict[str, str]:
     return found_substrings
 
 
-def compress_models(
-    models: list[schemas.RawReturnPredictions],
-) -> schemas.ReturnPredictions:
-    compressed_data = defaultdict(list)
+AGGREGATIONS = {
+    "min": pl.min("value").alias("min"),
+    "max": pl.max("value").alias("max"),
+    "mean": pl.mean("value").alias("mean"),
+    "median": pl.median("value").alias("median"),
+    "iqr": (pl.quantile("value", 0.75) - pl.quantile("value", 0.25)).alias("iqr"),
+    "stddev": pl.std("value").alias("stddev"),
+}
 
-    for model in models:
-        for field_name, field_value in model.model_dump().items():
-            compressed_data[field_name].append(field_value)
 
-    return schemas.ReturnPredictions(**compressed_data)
+def calc_cfs(dat: pl.DataFrame, basins: gpd.GeoDataFrame) -> pl.DataFrame:
+    query_basins = basins[basins["location"].isin(dat["location"].unique().to_list())]
+    query_basins = pl.from_pandas(query_basins.drop(columns="geometry"))
+    return (
+        dat.join(query_basins, on="location")
+        .with_columns(
+            value=pl.col("value") / 86400 / 304.8 * (pl.col("area") * 10.7639)
+        )
+        .drop("area")
+    )
 
 
 async def read_predictions(
-    predictions: schemas.GetPredictions, async_session: AsyncSession
-) -> schemas.ReturnPredictions:
-    async with async_session.begin() as session:
-        table = models.Data if predictions.units.value == "mm" else models.CFS
-        q = (
-            select(table)
-            .where(
-                table.location.in_(predictions.locations),
-                table.date <= predictions.date_end,
-                table.date >= predictions.date_start,
-                table.version == predictions.version.value,
-            )
-            .order_by(table.location, table.date)
+    predictions: schemas.GetPredictionsByLocations, frame: pl.LazyFrame
+) -> pl.DataFrame:
+    if predictions.latitude and predictions.longitude:
+        points = gpd.GeoDataFrame(
+            geometry=gpd.points_from_xy(
+                x=predictions.longitude, y=predictions.latitude, crs="EPSG:4326"
+            ),
+            crs="EPSG:4326",
         )
-
-        result = await session.execute(q)
-        data_rows = result.scalars().all()
-        if len(data_rows) == 0:
+        filtered_basins = gpd.sjoin(basins, points, how="inner", predicate="contains")
+        if filtered_basins.empty:
             raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                "No data available for requested location and time range.",
+                404, "No basins found containing the given latitude and longitude."
             )
-        data_schemas = [
-            schemas.RawReturnPredictions.model_validate(row) for row in data_rows
-        ]
 
-        return compress_models(data_schemas)
+        new_locs = filtered_basins["location"].values.tolist()
+        predictions.locations = list(set(predictions.locations or []) | set(new_locs))
 
+    dat = frame.filter(
+        pl.col("location").is_in(predictions.locations),
+        pl.col("date").le(predictions.date_end),
+        pl.col("date").ge(predictions.date_start),
+        pl.col("version").eq(predictions.version),
+    )
 
+    try:
+        agg_funcs = [AGGREGATIONS[x.value] for x in predictions.aggregations]
+        dat = dat.group_by("location", "version", "date").agg(*agg_funcs)
+        dat = dat.melt(
+            id_vars=["location", "version", "date"],
+            value_vars=[agg_func.value for agg_func in predictions.aggregations],
+            variable_name="metric",
+            value_name="value",
+        ).sort("location", "version", "metric", "date")
+    except AttributeError:
+        dat = dat.sort("location", "model_no", "version", "date")
 
-async def spatial_query(
-    lat: float,
-    lon: float,
-    predictions: schemas.GetPredictions,
-    async_session: AsyncSession,
-    return_compressed: bool=True,
-) -> schemas.ReturnLocation:
-    async with async_session.begin() as session:
-        point = f"POINT({lon} {lat})"
+    dat = dat.collect()
+    if predictions.units.value == "cfs":
+        dat = calc_cfs(dat, basins)
 
-        # First get the location_id from spatial query
-        location_subq = (
-            select(models.Locations.id)
-            .where(
-                func.ST_Contains(
-                    models.Locations.geometry, func.ST_GeomFromText(point, 4326)
-                )
-            )
-            .scalar_subquery()
-        )
-
-        # Then use that id to query the right table
-        table = models.Data if predictions.units.value == "mm" else models.CFS
-        stmt = select(table).where(
-            table.location == location_subq,
-            table.date <= predictions.date_end,
-            table.date >= predictions.date_start,
-            table.version == predictions.version.value,
-        ).order_by(table.date.desc())
-        
-        result = await session.execute(stmt)
-        data_rows = result.scalars().all()
-        if len(data_rows) == 0:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                "No data available for requested location and time range.",
-            )
-        data_schemas = [
-            schemas.RawReturnPredictions.model_validate(row) for row in data_rows
-        ]
-        if return_compressed:
-            return compress_models(data_schemas)
-        else: 
-            return data_schemas
+    return dat.with_columns(pl.col("value").round(4))

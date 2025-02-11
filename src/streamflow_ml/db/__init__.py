@@ -21,5 +21,5 @@ class ParquetConn:
         return self.df
 
 
-pq_conn = ParquetConn(f="/home/cbrust/data/streamflow/flow")
-basins = gpd.read_file("/home/cbrust/data/streamflow/basins.geojson")
+pq_conn = ParquetConn(f="/data/flow")
+basins = gpd.read_file("/data/basins.geojson")

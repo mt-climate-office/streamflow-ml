@@ -69,6 +69,12 @@ async def read_predictions(
         new_locs = filtered_basins["location"].values.tolist()
         predictions.locations = list(set(predictions.locations or []) | set(new_locs))
 
+    if len(predictions.locations) > 20:
+        raise HTTPException(
+            status_code=413,
+            detail="Too many locations requested. The maximum allowed is 20."
+        )
+
     dat = frame.filter(
         pl.col("location").is_in(predictions.locations),
         pl.col("date").le(predictions.date_end),

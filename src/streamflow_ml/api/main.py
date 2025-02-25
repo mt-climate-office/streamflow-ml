@@ -3,6 +3,7 @@ from urllib.parse import parse_qs as parse_query_string
 from urllib.parse import urlencode as encode_query_string
 
 from fastapi import FastAPI, Request, Depends, status, Query, Response
+from fastapi.responses import RedirectResponse
 from fastapi.security.api_key import APIKeyHeader
 from streamflow_ml.db import pq_conn
 from streamflow_ml.api import crud, schemas
@@ -67,18 +68,18 @@ app = FastAPI(
         "url": "https://climate.umt.edu",
         "email": "colin.brust@umt.edu",
     },
+    description=description,
     root_path="/streamflow-api",
 )
 
 app.add_middleware(QueryStringFlatteningMiddleware)
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def get_root(request: Request):
-    return {"working": "mmhm"}
+    return RedirectResponse("/streamflow-api/docs")
 
-
-@app.get("/predictions")
+@app.get("/predictions", tags=["Get Streamflow Data"])
 @app.get("/predictions/", include_in_schema=False)
 async def get_predictions(
     predictions: Annotated[schemas.GetPredictionsByLocations, Query()],
@@ -107,7 +108,7 @@ async def get_predictions(
     return schemas.ReturnPredictions(**out_dict)
 
 
-@app.get("/predictions/raw")
+@app.get("/predictions/raw", tags=["Get Streamflow Data"])
 @app.get("/predictions/raw/", include_in_schema=False)
 async def get_predictions_raw(
     predictions: Annotated[schemas.GetPredictionsRaw, Query()],

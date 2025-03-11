@@ -1,9 +1,12 @@
-import os
-
-import pyarrow
-import asyncio
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "httpx",
+#     "polars",
+#     "pyarrow",
+# ]
+# ///
 import argparse
-import httpx
 import polars as pl
 from pathlib import Path
 import pyarrow.parquet as pq
@@ -51,8 +54,16 @@ def create_hive_partition(pth: Path, out_pth: Path, version: str) -> None:
         )
 
 
-create_hive_partition(
-    Path("/data/ssd2/streamflow-ml-data-operational/operational-output/current-k-fold/"),
-    Path("/home/cbrust/data/current"),
-    "vPUB2025"
-)
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("out_dir", type=str, help="Output directory for partitioned current year data.")
+    args = parser.parse_args()
+
+    create_hive_partition(
+        Path("/data/ssd2/streamflow-ml-data-operational/operational-output/current-k-fold/"),
+        Path(args.out_dir),
+        "vPUB2025"
+    )

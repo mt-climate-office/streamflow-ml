@@ -5,7 +5,7 @@ from urllib.parse import urlencode as encode_query_string
 from fastapi import FastAPI, Request, Depends, status, Query, Response
 from fastapi.responses import RedirectResponse
 from fastapi.security.api_key import APIKeyHeader
-from streamflow_ml.db import pq_conn
+from streamflow_ml.db import pq_date_partition, pq_location_partition
 from streamflow_ml.api import crud, schemas
 from fastapi.exceptions import HTTPException
 import os
@@ -14,8 +14,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 description = """
-An API to deliver streamflow predicted by an ML model in ungaged basins across
-the contiguous USA.
+An API to deliver streamflow predictions from the Headwaters Hydrology Project ML model for ungaged basins across the contiguous USA.  
 """
 
 
@@ -60,16 +59,20 @@ def authenticate_sfml(api_key: str = Depends(sfml_key_header)):
 
 
 app = FastAPI(
-    title="MCO — Streamflow ML API",
+    title="Headwaters Hydrology Project API",
     version="0.0.1",
     terms_of_service="https://climate.umt.edu/about/agreement/",
     contact={
-        "name": "Colin Brust",
+        "name": "Colin Brust, Zach Hoylman",
         "url": "https://climate.umt.edu",
-        "email": "colin.brust@umt.edu",
+        "email": "colin.brust@mso.umt.edu",
     },
     description=description,
     root_path="/streamflow-api",
+    license_info={
+        "name": "Creative Commons Attribution-NonCommercial 4.0 International License",
+        "url": "https://creativecommons.org/licenses/by-nc/4.0/",
+    }
 )
 
 app.add_middleware(QueryStringFlatteningMiddleware)
@@ -83,8 +86,13 @@ async def get_root(request: Request):
 @app.get("/predictions/", include_in_schema=False)
 async def get_predictions(
     predictions: Annotated[schemas.GetPredictionsByLocations, Query()],
-    frame: Annotated[pl.LazyFrame, Depends(pq_conn)],
+    location_frame: Annotated[pl.LazyFrame, Depends(pq_location_partition)],
+    date_frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)],
 ) -> schemas.ReturnPredictions:
+    """ Get streamflow predictions for a given location and date range. Data is aggregated across all 10 k-fold
+    models using median as the default aggregation function. Other aggregation functions can be specified using the
+    `aggregations` query parameter.
+    """
     if (
         predictions.locations is None
         and predictions.longitude is None
@@ -94,7 +102,7 @@ async def get_predictions(
             422,
             "Either the `locations` or `latitude` and `longitude` query parameters must be specified to retrieve data.",
         )
-    data = await crud.read_predictions(predictions, frame)
+    data = await crud.read_predictions(predictions, location_frame, date_frame)
     if predictions.as_csv:
         return Response(
             content=data.write_csv(),
@@ -112,8 +120,12 @@ async def get_predictions(
 @app.get("/predictions/raw/", include_in_schema=False)
 async def get_predictions_raw(
     predictions: Annotated[schemas.GetPredictionsRaw, Query()],
-    frame: Annotated[pl.LazyFrame, Depends(pq_conn)],
+    location_frame: Annotated[pl.LazyFrame, Depends(pq_location_partition)],
+    date_frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)],
 ) -> schemas.RawReturnPredictions:
+    """ Get streamflow predictions for a given location and date range. This endpoint returns the raw predictions
+    from the 10 k-fold models without any aggregation.
+    """
     if (
         predictions.locations is None
         and predictions.longitude is None
@@ -123,7 +135,7 @@ async def get_predictions_raw(
             422,
             "Either the `locations` or `latitude` and `longitude` query parameters must be specified to retrieve data.",
         )
-    data = await crud.read_predictions(predictions, frame)
+    data = await crud.read_predictions(predictions, location_frame, date_frame)
     if predictions.as_csv:
         return Response(
             content=data.write_csv(),
@@ -137,10 +149,25 @@ async def get_predictions_raw(
     return schemas.RawReturnPredictions(**out_dict)
 
 
-# TODO: Need to have a separate partition to do this effectively.
-# @app.get("/predictions/latest")
-# @app.get("/predictions/latest/", include_in_schema=False)
-# async def get_latest_preds(
-#     frame: Annotated[pl.LazyFrame, Depends(pq_conn)]
-# ):
-#     ...
+@app.get("/predictions/latest", tags=["Get Streamflow Data"])
+@app.get("/predictions/latest/", include_in_schema=False)
+async def get_latest_predictions(
+    predictions: Annotated[schemas.GetLatestPredictions, Query()],
+    frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)]
+):
+    """ Get the latest streamflow predictions for all locations. Data is aggregated across all 10 k-fold models using
+    median as the default aggregation function. Other aggregation functions can be specified using the `aggregations`
+    query parameter.
+    """
+    data = await crud.get_latest_predictions(frame, predictions)
+    if predictions.as_csv:
+        return Response(
+            content=data.write_csv(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=latest_flow_{str(data['date'][0]).replace("-", "")}_predictions.csv"
+            },
+        )
+
+    out_dict = {col: data[col].to_list() for col in data.columns}
+    return schemas.ReturnPredictions(**out_dict)

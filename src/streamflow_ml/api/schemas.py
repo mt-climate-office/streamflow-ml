@@ -147,6 +147,13 @@ class Aggregations(BaseModel):
     )
 
 
+class GetLatestPredictions(Aggregations):
+    as_csv: bool = Field(
+        False,
+        description="Should data be returned as a .csv (defaults to False. Data returned in json)?",
+        title="As .CSV",
+    )
+
 class GetPredictionsRaw(GetPredictionsBase, Locations): ...
 
 

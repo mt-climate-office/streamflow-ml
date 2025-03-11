@@ -1,4 +1,4 @@
-# Headwaters Hydrology Project API  
+# Headwaters Hydrology Project API
 
 An API to deliver streamflow predictions from the Headwaters Hydrology Project ML model for ungaged basins across the contiguous USA.  
 
@@ -18,7 +18,7 @@ The HHP is licensed under the [Creative Commons Attribution-NonCommercial 4.0 In
 
 ### **1. Get Predictions**  
 **Endpoint:** `/predictions`  
-**Description:** Retrieves streamflow predictions with optional aggregations.  
+**Description:** Get streamflow predictions for a given location and date range. Data is aggregated across all 10 k-fold models using median as the default aggregation function. Other aggregation functions can be specified using the `aggregations` query parameter.
 
 #### Query Parameters  
 - `aggregations` _(optional)_: Aggregation function(s) (e.g., `min`, `max`, `mean`, `median`, `stddev`, `iqr`).  
@@ -39,7 +39,7 @@ The HHP is licensed under the [Creative Commons Attribution-NonCommercial 4.0 In
 
 ### **2. Get Raw Predictions**  
 **Endpoint:** `/predictions/raw`  
-**Description:** Retrieves raw streamflow predictions without aggregation.  
+**Description:** Get streamflow predictions for a given location and date range. This endpoint returns the raw predictions from the 10 k-fold models without any aggregation.
 
 #### Query Parameters  
 (Same as `/predictions`, excluding `aggregations`.)  
@@ -47,6 +47,21 @@ The HHP is licensed under the [Creative Commons Attribution-NonCommercial 4.0 In
 #### Responses  
 - **200:** Successful response with raw JSON data.  
 - **422:** Validation error.  
+
+---
+
+### **3. Get Latest Predictions**  
+**Endpoint:** `/predictions/latest`  
+**Description:** Get the latest streamflow predictions for all locations. Data is aggregated across all 10 k-fold models using median as the default aggregation function. Other aggregation functions can be specified using the `aggregations` query parameter.
+
+#### Query Parameters  
+- `aggregations` _(optional)_: Aggregation function(s) (e.g., `min`, `max`, `mean`, `median`, `stddev`, `iqr`).  
+- `as_csv` _(optional, default: `false`)_: Return data as CSV (`true` or `false`).  
+
+#### Responses  
+- **200:** Successful response with JSON data.  
+- **422:** Validation error.  
+
 
 ## Data Models  
 

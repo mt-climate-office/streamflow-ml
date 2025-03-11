@@ -1,54 +1,29 @@
-import os
-from typing import AsyncIterator, Annotated
-
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import (
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.sql import text
-from sqlalchemy import URL
-from dotenv import load_dotenv
-from streamflow_ml.db.timescale import TIMESCALE_SETUP
-
-load_dotenv()
+import polars as pl
+import geopandas as gpd
 
 
-url = URL.create(
-    "postgresql+asyncpg",
-    host=os.getenv("POSTGRES_HOST"),
-    username=os.getenv("POSTGRES_USER"),
-    database=os.getenv("POSTGRES_DB"),
-    password=os.getenv("POSTGRES_PASSWORD"),
-    port=5434,
-)
+class ParquetConn:
+    def __init__(self, f):
+        self.f = f
+        self.df = pl.scan_parquet(
+            self.f,
+            hive_partitioning=True,
+            schema={
+                "date": pl.Date,
+                "value": pl.Float64,
+                "model_no": pl.Int32,
+                "location": pl.String,
+                "version": pl.String,
+            },
+        )
 
-async_engine = create_async_engine(url)
-
-AsyncSessionLocal = async_sessionmaker(
-    bind=async_engine,
-    autoflush=False,
-    future=True,
-)
-
-
-async def get_session() -> AsyncIterator[async_sessionmaker]:
-    try:
-        yield AsyncSessionLocal
-    except SQLAlchemyError as e:
-        print(e)
-        raise
+    def __call__(self) -> pl.LazyFrame:
+        return self.df
 
 
-AsyncSession = Annotated[async_sessionmaker, Depends(get_session)]
-
-
-async def init_db(async_engine, base):
-    async with async_engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
-        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS flow;"))
-        await conn.run_sync(base.metadata.create_all)
-        if os.getenv("INIT_TIMESCALE"):
-            async for query in TIMESCALE_SETUP:
-                await conn.execute(query)
+# pq_station_partition = ParquetConn(f="/data/flow")
+# pq_date_partition = ParquetConn(f="/data/current")
+# basins = gpd.read_file("/data/basins.geojson")
+pq_location_partition = ParquetConn(f="/home/cbrust/data/streamflow/flow")
+pq_date_partition = ParquetConn(f="/home/cbrust/data/streamflow/current")
+basins = gpd.read_file("/home/cbrust/data/streamflow/basins.geojson")

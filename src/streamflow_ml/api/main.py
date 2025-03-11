@@ -1,25 +1,20 @@
-from typing import Annotated, List
+from typing import Annotated
 from urllib.parse import parse_qs as parse_query_string
 from urllib.parse import urlencode as encode_query_string
-from itertools import chain
 
-from fastapi import FastAPI, Request, UploadFile, Depends, status, Query, Path
+from fastapi import FastAPI, Request, Depends, status, Query, Response
+from fastapi.responses import RedirectResponse
 from fastapi.security.api_key import APIKeyHeader
-from streamflow_ml.db import async_engine, init_db, models, AsyncSession, get_session
+from streamflow_ml.db import pq_date_partition, pq_location_partition
 from streamflow_ml.api import crud, schemas
-from contextlib import asynccontextmanager
-from geoalchemy2.functions import ST_GeomFromGeoJSON
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from sqlalchemy.dialects.postgresql import insert
 from fastapi.exceptions import HTTPException
-import json
 import os
+import polars as pl
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 description = """
-An API to deliver streamflow predicted by an ML model in ungaged basins across
-the contiguous USA.
+An API to deliver streamflow predictions from the Headwaters Hydrology Project ML model for ungaged basins across the contiguous USA.  
 """
 
 
@@ -63,179 +58,116 @@ def authenticate_sfml(api_key: str = Depends(sfml_key_header)):
         )
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db(async_engine, models.Base)
-    yield
-    await async_engine.dispose()
-
-
 app = FastAPI(
-    lifespan=lifespan,
-    title="MCO — Streamflow ML API",
+    title="Headwaters Hydrology Project API",
     version="0.0.1",
     terms_of_service="https://climate.umt.edu/about/agreement/",
     contact={
-        "name": "Colin Brust",
+        "name": "Colin Brust, Zach Hoylman",
         "url": "https://climate.umt.edu",
-        "email": "colin.brust@umt.edu",
+        "email": "colin.brust@mso.umt.edu",
     },
+    description=description,
     root_path="/streamflow-api",
+    license_info={
+        "name": "Creative Commons Attribution-NonCommercial 4.0 International License",
+        "url": "https://creativecommons.org/licenses/by-nc/4.0/",
+    }
 )
 
 app.add_middleware(QueryStringFlatteningMiddleware)
 
-@app.get("/")
+
+@app.get("/", include_in_schema=False)
 async def get_root(request: Request):
-    return {"working": "mmhm"}
+    return RedirectResponse("/streamflow-api/docs")
 
-
-# Can post with curl -X POST "http://127.0.0.1:8000/locations" -F "file=@./streamflow_ml_operational_inference_huc10_simple.geojson"
-@app.post("/locations")
-@app.post("/locations/", include_in_schema=False)
-async def post_locations(
-    file: UploadFile,
-    async_session: Annotated[AsyncSession, Depends(get_session)],
-    api_key: Annotated[authenticate_sfml, Depends()],
-):
-    """Post a set of data to the"""
-    if not file.filename.endswith(".geojson"):
-        raise HTTPException(
-            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            "Invalid file type. Only .geojson files are supported.",
-        )
-
-    contents = await file.read()
-    data = json.loads(contents)
-
-    locations = []
-
-    for feature in data["features"]:
-        props = feature.get("properties")
-        props = crud.remap_keys(props, ["id", "name", "group"])
-        geom = feature.get("geometry")
-        geom = json.dumps(geom)
-
-        location = models.Locations(geometry=ST_GeomFromGeoJSON(geom), **props)
-        locations.append(location)
-
-    try:
-        async with async_session.begin() as session:
-            session.add_all(locations)
-    except (SQLAlchemyError, IntegrityError) as e:
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            f"Error while saving locations: {str(e)}",
-        )
-
-    return {"message": f"Successfully added {len(locations)} locations."}
-
-
-@app.post("/prediction")
-async def post_prediction(
-    prediction: schemas.CreatePredictions,
-    async_session: Annotated[AsyncSession, Depends(get_session)],
-    api_key: Annotated[authenticate_sfml, Depends()],
-):
-    try:
-        async with async_session.begin() as session:
-            prediction = models.Data(**prediction.__dict__)
-            # merge does an insert if data don't exist, upsert if they do.
-            session.merge(prediction)
-            await session.commit()
-    except IntegrityError:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"{prediction} already exists.")
-
-    return 1
-
-
-@app.post("/predictions")
-async def post_predictions(
-    predictions: List[schemas.CreatePredictions],
-    async_session: Annotated[AsyncSession, Depends(get_session)],
-    api_key: Annotated[authenticate_sfml, Depends()],
-):
-    try:
-        async with async_session.begin() as session:
-            # Convert list of Pydantic objects to list of model instances
-            # prediction_models = [
-            #     models.Data(**prediction.__dict__) for prediction in predictions
-            # ]
-            stmt = insert(models.Data).values(
-                [pred.model_dump() for pred in predictions]
-            )
-            indices = ["location", "date", "version"]
-            upsert_stmt = stmt.on_conflict_do_update(
-                index_elements=indices,
-                set_={
-                    key: stmt.excluded[key]
-                    for key in models.Data.__table__.columns.keys()
-                    if key not in indices
-                },
-            )
-
-            await session.execute(upsert_stmt)
-            await session.commit()
-    except IntegrityError:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, "Some or all of the predictions already exist."
-        )
-
-    return len(predictions)
-
-
-@app.get("/predictions")
+@app.get("/predictions", tags=["Get Streamflow Data"])
 @app.get("/predictions/", include_in_schema=False)
 async def get_predictions(
     predictions: Annotated[schemas.GetPredictionsByLocations, Query()],
-    async_session: Annotated[AsyncSession, Depends(get_session)],
+    location_frame: Annotated[pl.LazyFrame, Depends(pq_location_partition)],
+    date_frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)],
 ) -> schemas.ReturnPredictions:
-    data = await crud.read_predictions(predictions, async_session)
-    return data
-
-
-
-@app.get("/predictions/{latitude}/{longitude}")
-async def get_predictions_from_point(
-    latitude: Annotated[
-        float,
-        Path(
-            title="Latitude",
-            description="Latitude of the region of interest.",
-            ge=24,
-            le=50,
-        ),
-    ],
-    longitude: Annotated[
-        float,
-        Path(
-            title="Longitude",
-            description="Longitude of the region of interest.",
-            ge=-125.0,
-            le=-66.0,
-        ),
-    ],
-    predictions: Annotated[schemas.GetPredictions, Query()],
-    async_session: Annotated[AsyncSession, Depends(get_session)],
-) -> schemas.ReturnPredictions:
-    return await crud.spatial_query(latitude, longitude, predictions, async_session)
-
-
-@app.get("/predictions/spatial")
-@app.get("/predictions/spatial/", include_in_schema=False)
-async def get_predictions_spatially(
-    predictions: Annotated[schemas.GetPredictionsSpatially, Query()],
-    async_session: Annotated[AsyncSession, Depends(get_session)],
-) -> schemas.ReturnPredictions:
-    lat, lon = predictions.latitude, predictions.longitude
-    if len(lat) != len(lon):
+    """ Get streamflow predictions for a given location and date range. Data is aggregated across all 10 k-fold
+    models using median as the default aggregation function. Other aggregation functions can be specified using the
+    `aggregations` query parameter.
+    """
+    if (
+        predictions.locations is None
+        and predictions.longitude is None
+        and predictions.latitude is None
+    ):
         raise HTTPException(
-            status.HTTP_406_NOT_ACCEPTABLE,
-            "Latitude and Longitude query parameters must be the same length"
+            422,
+            "Either the `locations` or `latitude` and `longitude` query parameters must be specified to retrieve data.",
+        )
+    data = await crud.read_predictions(predictions, location_frame, date_frame)
+    if predictions.as_csv:
+        return Response(
+            content=data.write_csv(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=basins_{'_'.join(data['location'].unique().to_list())}_predictions.csv"
+            },
         )
 
-    locs = list(zip(lat, lon))
-    results = []
-    for lat, lon in locs:
-        results.append(await crud.spatial_query(lat, lon, predictions, async_session, return_compressed=False))
-    return crud.compress_models(list(chain.from_iterable(results)))
+    out_dict = {col: data[col].to_list() for col in data.columns}
+    return schemas.ReturnPredictions(**out_dict)
+
+
+@app.get("/predictions/raw", tags=["Get Streamflow Data"])
+@app.get("/predictions/raw/", include_in_schema=False)
+async def get_predictions_raw(
+    predictions: Annotated[schemas.GetPredictionsRaw, Query()],
+    location_frame: Annotated[pl.LazyFrame, Depends(pq_location_partition)],
+    date_frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)],
+) -> schemas.RawReturnPredictions:
+    """ Get streamflow predictions for a given location and date range. This endpoint returns the raw predictions
+    from the 10 k-fold models without any aggregation.
+    """
+    if (
+        predictions.locations is None
+        and predictions.longitude is None
+        and predictions.latitude is None
+    ):
+        raise HTTPException(
+            422,
+            "Either the `locations` or `latitude` and `longitude` query parameters must be specified to retrieve data.",
+        )
+    data = await crud.read_predictions(predictions, location_frame, date_frame)
+    if predictions.as_csv:
+        return Response(
+            content=data.write_csv(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=basins_{'_'.join(data['location'].unique().to_list())}_predictions.csv"
+            },
+        )
+
+    out_dict = {col: data[col].to_list() for col in data.columns}
+    return schemas.RawReturnPredictions(**out_dict)
+
+
+@app.get("/predictions/latest", tags=["Get Streamflow Data"])
+@app.get("/predictions/latest/", include_in_schema=False)
+async def get_latest_predictions(
+    predictions: Annotated[schemas.GetLatestPredictions, Query()],
+    frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)]
+):
+    """ Get the latest streamflow predictions for all locations. Data is aggregated across all 10 k-fold models using
+    median as the default aggregation function. Other aggregation functions can be specified using the `aggregations`
+    query parameter.
+    """
+    data = await crud.get_latest_predictions(frame, predictions)
+    if predictions.as_csv:
+        return Response(
+            content=data.write_csv(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=latest_flow_{str(data['date'][0]).replace("-", "")}_predictions.csv"
+            },
+        )
+
+    out_dict = {col: data[col].to_list() for col in data.columns}
+    return schemas.ReturnPredictions(**out_dict)

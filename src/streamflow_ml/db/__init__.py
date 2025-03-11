@@ -23,7 +23,7 @@ class ParquetConn:
 
 pq_station_partition = ParquetConn(f="/data/flow")
 pq_date_partition = ParquetConn(f="/data/current")
-# basins = gpd.read_file("/data/basins.geojson")
+basins = gpd.read_file("/data/basins.geojson")
 # pq_location_partition = ParquetConn(f="/home/cbrust/data/streamflow/flow")
 # pq_date_partition = ParquetConn(f="/home/cbrust/data/streamflow/current")
-basins = gpd.read_file("/home/cbrust/data/streamflow/basins.geojson")
+# basins = gpd.read_file("/home/cbrust/data/streamflow/basins.geojson")

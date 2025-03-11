@@ -21,7 +21,7 @@ class ParquetConn:
         return self.df
 
 
-pq_station_partition = ParquetConn(f="/data/flow")
+pq_location_partition = ParquetConn(f="/data/flow")
 pq_date_partition = ParquetConn(f="/data/current")
 basins = gpd.read_file("/data/basins.geojson")
 # pq_location_partition = ParquetConn(f="/home/cbrust/data/streamflow/flow")

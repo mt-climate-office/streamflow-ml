@@ -154,6 +154,7 @@ class GetLatestPredictions(Aggregations):
         title="As .CSV",
     )
 
+
 class GetPredictionsRaw(GetPredictionsBase, Locations): ...
 
 

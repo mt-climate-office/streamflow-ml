@@ -72,7 +72,7 @@ app = FastAPI(
     license_info={
         "name": "Creative Commons Attribution-NonCommercial 4.0 International License",
         "url": "https://creativecommons.org/licenses/by-nc/4.0/",
-    }
+    },
 )
 
 app.add_middleware(QueryStringFlatteningMiddleware)
@@ -82,6 +82,7 @@ app.add_middleware(QueryStringFlatteningMiddleware)
 async def get_root(request: Request):
     return RedirectResponse("/streamflow-api/docs")
 
+
 @app.get("/predictions", tags=["Get Streamflow Data"])
 @app.get("/predictions/", include_in_schema=False)
 async def get_predictions(
@@ -89,7 +90,7 @@ async def get_predictions(
     location_frame: Annotated[pl.LazyFrame, Depends(pq_location_partition)],
     date_frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)],
 ) -> schemas.ReturnPredictions:
-    """ Get streamflow predictions for a given location and date range. Data is aggregated across all 10 k-fold
+    """Get streamflow predictions for a given location and date range. Data is aggregated across all 10 k-fold
     models using median as the default aggregation function. Other aggregation functions can be specified using the
     `aggregations` query parameter.
     """
@@ -123,7 +124,7 @@ async def get_predictions_raw(
     location_frame: Annotated[pl.LazyFrame, Depends(pq_location_partition)],
     date_frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)],
 ) -> schemas.RawReturnPredictions:
-    """ Get streamflow predictions for a given location and date range. This endpoint returns the raw predictions
+    """Get streamflow predictions for a given location and date range. This endpoint returns the raw predictions
     from the 10 k-fold models without any aggregation.
     """
     if (
@@ -153,9 +154,9 @@ async def get_predictions_raw(
 @app.get("/predictions/latest/", include_in_schema=False)
 async def get_latest_predictions(
     predictions: Annotated[schemas.GetLatestPredictions, Query()],
-    frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)]
+    frame: Annotated[pl.LazyFrame, Depends(pq_date_partition)],
 ):
-    """ Get the latest streamflow predictions for all locations. Data is aggregated across all 10 k-fold models using
+    """Get the latest streamflow predictions for all locations. Data is aggregated across all 10 k-fold models using
     median as the default aggregation function. Other aggregation functions can be specified using the `aggregations`
     query parameter.
     """
@@ -165,7 +166,7 @@ async def get_latest_predictions(
             content=data.write_csv(),
             media_type="text/csv",
             headers={
-                "Content-Disposition": f"attachment; filename=latest_flow_{str(data['date'][0]).replace("-", "")}_predictions.csv"
+                "Content-Disposition": f"attachment; filename=latest_flow_{str(data['date'][0]).replace('-', '')}_predictions.csv"
             },
         )
 

@@ -17,7 +17,9 @@ from pathlib import Path
 from tqdm.asyncio import tqdm
 
 
-def parse_observations(data: Path | str, version: str = "v1.0", model_no: int = 0) -> pl.DataFrame:
+def parse_observations(
+    data: Path | str, version: str = "v1.0", model_no: int = 0
+) -> pl.DataFrame:
     return (
         pl.read_parquet(data)
         .select(["basin_id", "time", "mm_d"])
@@ -28,11 +30,13 @@ def parse_observations(data: Path | str, version: str = "v1.0", model_no: int = 
                 "mm_d": "value",
             }
         )
-        .with_columns([
-            pl.col("date").cast(pl.Utf8), 
-            pl.lit(version).alias("version"),
-            pl.lit(model_no).alias("model_no")
-        ])
+        .with_columns(
+            [
+                pl.col("date").cast(pl.Utf8),
+                pl.lit(version).alias("version"),
+                pl.lit(model_no).alias("model_no"),
+            ]
+        )
     )
 
 
@@ -87,14 +91,14 @@ def main():
         "--version",
         type=str,
         default="vPUB2025",
-        help="The model version to assign to the data in the database"
+        help="The model version to assign to the data in the database",
     )
 
     parser.add_argument(
         "--model_no",
         type=int,
         default=0,
-        help="The k-fold model version to assign to the data in the database."
+        help="The k-fold model version to assign to the data in the database.",
     )
 
     args = parser.parse_args()

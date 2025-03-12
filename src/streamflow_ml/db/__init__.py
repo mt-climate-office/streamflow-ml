@@ -19,12 +19,8 @@ class ParquetConn:
 
     def _scan_parquet(self):
         self.last_refresh = time.time()
-        return pl.scan_parquet(
-            self.f,
-            hive_partitioning=True,
-            schema=self.schema
-        )
-    
+        return pl.scan_parquet(self.f, hive_partitioning=True, schema=self.schema)
+
     def __call__(self) -> pl.LazyFrame:
         if time.time() - self.last_refresh > self.refresh_interval:
             self.df = self._scan_parquet()

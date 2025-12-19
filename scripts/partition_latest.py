@@ -59,14 +59,18 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "pth", type=str, help="Input directory containing data files (default: current directory)."
+    )
+    parser.add_argument(
         "out_dir", type=str, help="Output directory for partitioned current year data."
+    )
+    parser.add_argument(
+        "version", type=str, required=True, help="Version string (required)."
     )
     args = parser.parse_args()
 
     create_hive_partition(
-        Path(
-            "/data/ssd2/streamflow-ml-data-operational/operational-output/current-k-fold/"
-        ),
+        Path(args.pth),
         Path(args.out_dir),
-        "vPUB2025",
+        args.version,
     )

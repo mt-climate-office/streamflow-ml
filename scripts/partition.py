@@ -44,10 +44,11 @@ def create_hive_partition(pth: Path, out_pth: Path, version: str) -> None:
 if __name__ == "__main__":
     import argparse
 
+
     parser = argparse.ArgumentParser(description="Partition Parquet files into Hive-style partitions.")
-    parser.add_argument("--pth", type=Path, required=True, help="Input directory path")
-    parser.add_argument("--out_pth", type=Path, required=True, help="Output directory path")
-    parser.add_argument("--version", type=str, required=True, help="Version string")
+    parser.add_argument("pth", type=Path, help="Input directory path")
+    parser.add_argument("out_pth", type=Path, help="Output directory path")
+    parser.add_argument("version", type=str, help="Version string")
 
     args = parser.parse_args()
 

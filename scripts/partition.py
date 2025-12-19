@@ -41,8 +41,18 @@ def create_hive_partition(pth: Path, out_pth: Path, version: str) -> None:
         )
 
 
-create_hive_partition(
-    Path("/home/cbrust/data/folds/historical-k-fold/"),
-    Path("/home/cbrust/data/flow"),
-    "vPUB2025",
-)
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Partition Parquet files into Hive-style partitions.")
+    parser.add_argument("--pth", type=Path, required=True, help="Input directory path")
+    parser.add_argument("--out_pth", type=Path, required=True, help="Output directory path")
+    parser.add_argument("--version", type=str, required=True, help="Version string")
+
+    args = parser.parse_args()
+
+    create_hive_partition(
+        args.pth,
+        args.out_pth,
+        args.version,
+    )
